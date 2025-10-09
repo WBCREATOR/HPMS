@@ -214,8 +214,3 @@ function runHPMS(code) {
         }
     });
 }
-        // Cargar archivo .hpms
-fetch("first-project.hpms")
-    .then(response => response.text())
-    .then(text => runHPMS(text))
-    .catch(err => console.error("Error cargando HPMS:", err));
