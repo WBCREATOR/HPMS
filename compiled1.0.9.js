@@ -42,10 +42,6 @@ let partPageConfig = {
     }
 };
 
-// ❌ FIX: wrong line removed
-// document.createElement("div#output");
-
-// --- FIX OUTPUT SAFE INIT ---
 let safeOutput = document.getElementById("output");
 
 if (!safeOutput) {
@@ -103,89 +99,6 @@ function toMorse(text) {
         .join(" ");
 }
 
-// --- BLOCK EXTRACTOR ---
-function extractBlock(lines, startIndex) {
-    const block = [];
-    let i = startIndex;
-
-    for (let j = i + 1; j < lines.length; j++) {
-        const ln = lines[j].trim();
-        if (ln === "}" || ln === "};") {
-            return { block, endIndex: j };
-        }
-        block.push(ln);
-    }
-
-    return { block, endIndex: lines.length - 1 };
-}
-
-// --- BACKGROUND ---
-function convertHPMSBackground(val) {
-    if (!val) return null;
-    val = val.replace(/;$/, "").trim();
-
-    if (val.includes("gradient(")) {
-        const inside = val.substring(val.indexOf("(") + 1, val.lastIndexOf(")"));
-        const parts = inside.split(",");
-
-        const angle = Number(parts[0].replace("deg", "")) || 0;
-        const colors = parts[1];
-
-        const match = colors.match(/["']([^"']+)["']\s*::\s*["']([^"']+)["']/);
-
-        if (!match) return null;
-
-        return `linear-gradient(${angle}deg, ${match[1]}, ${match[2]})`;
-    }
-
-    return val.replace(/["']/g, "");
-}
-
-// --- EVENTS ---
-function executeEventLine(line) {
-    line = line.trim();
-    if (!line) return;
-
-    if (/Write\s*=\s*print\("(.+)"\);?/i.test(line)) {
-        const text = line.match(/Write\s*=\s*print\("(.+)"\);?/i)[1];
-        printP(text);
-        return;
-    }
-
-    if (/^body\.selector\(color\)\s*=\s*(.*);?$/i.test(line)) {
-        document.body.style.backgroundColor =
-            line.match(/^body\.selector\(color\)\s*=\s*(.*);?$/i)[1];
-        return;
-    }
-
-    if (/^text\.selector\(color\)\s*=\s*(.*);?$/i.test(line)) {
-        safeOutput.style.color =
-            line.match(/^text\.selector\(color\)\s*=\s*(.*);?$/i)[1];
-        return;
-    }
-
-    if (/^var\s+/i.test(line)) {
-        const parts = line.replace(/^var\s+/i, "").split("=");
-        variables[parts[0].trim()] = Number(parts[1]);
-        return;
-    }
-
-    if (/Write\s*=\s*math\((.*)\)/i.test(line)) {
-        const expr = line.match(/Write\s*=\s*math\((.*)\)/i)[1];
-
-        const replaced = expr.replace(/\b(\w+)\b/g, v =>
-            variables[v] !== undefined ? variables[v] : v
-        );
-
-        try {
-            math(Function(`return ${replaced}`)());
-        } catch (e) {
-            console.error("Math error", e);
-        }
-        return;
-    }
-}
-
 // --- PART PAGE RENDER ---
 function renderPartPage() {
     const HPMS_HEADER = document.createElement("header");
@@ -196,74 +109,19 @@ function renderPartPage() {
     document.body.appendChild(HPMS_MAIN);
     document.body.appendChild(HPMS_FOOTER);
 
-    // HEADER
-    if (partPageImport.header || partPageUsed.header) {
-        if (partPageConfig.header.title) {
-            const h1 = document.createElement("h1");
-            h1.textContent = partPageConfig.header.title;
-            HPMS_HEADER.appendChild(h1);
-        }
-
-        if (partPageConfig.header.bg)
-            HPMS_HEADER.style.background = partPageConfig.header.bg;
-
-        if (partPageConfig.header.fixed) {
-            HPMS_HEADER.style.position = "fixed";
-            HPMS_HEADER.style.top = "0";
-        }
+    if (partPageConfig.header.title) {
+        const h1 = document.createElement("h1");
+        h1.textContent = partPageConfig.header.title;
+        HPMS_HEADER.appendChild(h1);
     }
 
-    // FOOTER
-    if (partPageImport.footer || partPageUsed.footer) {
-        if (partPageConfig.footer.content) {
-            const p = document.createElement("p");
-            p.textContent = partPageConfig.footer.content;
-            HPMS_FOOTER.appendChild(p);
-        }
-
-        if (partPageConfig.footer.bg)
-            HPMS_FOOTER.style.background = partPageConfig.footer.bg;
-
-        if (partPageConfig.footer.fixed) {
-            HPMS_FOOTER.style.position = "fixed";
-            HPMS_FOOTER.style.bottom = "0";
-        }
+    if (partPageConfig.footer.content) {
+        const p = document.createElement("p");
+        p.textContent = partPageConfig.footer.content;
+        HPMS_FOOTER.appendChild(p);
     }
-
-    const headerH = HPMS_HEADER.getBoundingClientRect().height;
-    const footerH = HPMS_FOOTER.getBoundingClientRect().height;
-
-    if (partPageConfig.header.fixed)
-        HPMS_MAIN.style.paddingTop = headerH + "px";
-
-    if (partPageConfig.footer.fixed)
-        HPMS_MAIN.style.paddingBottom = footerH + "px";
 
     HPMS_MAIN.appendChild(safeOutput);
-}
-
-// --- CARD SYSTEM ---
-function createCardComponent(params) {
-    const card = document.createElement("div");
-    card.style.width = params.wh + "px";
-    card.style.height = params.ht + "px";
-
-    const inner = document.createElement("div");
-    inner.style.width = "100%";
-    inner.style.height = "100%";
-    inner.style.transition = "0.6s";
-
-    const front = document.createElement("div");
-    front.style.background = params.gradient;
-
-    const back = document.createElement("div");
-    back.innerHTML = params.hoverText;
-
-    card.appendChild(inner);
-    inner.appendChild(front);
-    inner.appendChild(back);
-
-    return card;
 }
 
 // --- MAIN COMPILER ---
@@ -282,6 +140,65 @@ function runHPMS(code) {
         // IMPORT MORSE
         if (/@import\s+morse\(\);/i.test(line)) {
             morseEnabled = true;
+            continue;
+        }
+
+        // NAME
+        if (line.startsWith("name(")) {
+            const title = line.match(/name\("(.*)"\)/i)[1];
+            document.title = title;
+            continue;
+        }
+
+        // LANG
+        if (line.startsWith("lang:")) {
+            const lang = line.split(":")[1].replace(";", "").trim();
+            document.documentElement.lang = lang;
+            continue;
+        }
+
+        // PRINT
+        if (/Write\s*=\s*print\(".*"\)/i.test(line)) {
+            const text = line.match(/Write\s*=\s*print\("(.+)"\)/i)[1];
+            printP(text);
+            continue;
+        }
+
+        // VARIABLES
+        if (/^var\s+/i.test(line)) {
+            const parts = line.replace(/^var\s+/i, "").split("=");
+            variables[parts[0].trim()] = Number(parts[1]);
+            continue;
+        }
+
+        // MATH
+        if (/Write\s*=\s*math\((.*)\)/i.test(line)) {
+            const expr = line.match(/Write\s*=\s*math\((.*)\)/i)[1];
+
+            const replaced = expr.replace(/\b(\w+)\b/g, v =>
+                variables[v] !== undefined ? variables[v] : v
+            );
+
+            try {
+                math(Function(`return ${replaced}`)());
+            } catch (e) {
+                console.error("Math error", e);
+            }
+            continue;
+        }
+
+        // MORSE
+        if (morseEnabled && /^morse\(".*"\s*::\s*morse\(\)\)/i.test(line)) {
+            const text = line.match(/^morse\("(.*)"\s*::\s*morse\(\)\)/i)[1];
+
+            const div = document.createElement("div");
+            div.textContent = toMorse(text);
+            div.style.background = "#222";
+            div.style.color = "#0f0";
+            div.style.padding = "10px";
+            div.style.borderRadius = "8px";
+
+            safeOutput.appendChild(div);
             continue;
         }
 
@@ -306,6 +223,5 @@ function runHPMS(code) {
         }
     }
 
-    // ❗ FIX IMPORTANT: render ONCE only
     renderPartPage();
 }
